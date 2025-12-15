@@ -63,7 +63,7 @@
         // ----------------------------------------------------------------
         // **請將此處替換為您正確部署後的 Google Apps Script Web App URL**
         // 格式應為: https://script.google.com/macros/s/AKfy.../exec
-        const APPS_SCRIPT_URL = 'YOUR_DEPLOYED_APPS_SCRIPT_URL_HERE'; 
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby7DWuDzbsJo-cQd1FFnI0cUrPOSGqIEZqrU3hzYn8n7AIJFCOE0LpWF64tlpFslWwW/exec'; 
         // ================================================================
 
         // ----------------------------------------------------------------
@@ -238,4 +238,5 @@
 
     </script>
 </body>
+
 </html>
