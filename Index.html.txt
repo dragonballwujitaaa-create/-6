@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>俄羅斯方塊專題 - Tetris (GitHub 部署)</title>
+    <!-- 載入 Tailwind CSS 確保樣式美觀 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #1f2937; color: #f9fafb; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .game-container { display: flex; flex-direction: column; align-items: center; padding: 20px; background-color: #374151; border-radius: 12px; box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
+        .game-area { display: flex; gap: 20px; }
+        #tetris-canvas { background-color: #111827; border: 4px solid #4b5563; border-radius: 6px; }
+        .info-panel { width: 150px; display: flex; flex-direction: column; gap: 15px; }
+        .score-card, .status-card { background-color: #4b5563; padding: 12px; border-radius: 8px; font-weight: bold; }
+        .score-card span, .status-card span { display: block; font-size: 1.5rem; color: #34d399; }
+        button { transition: all 0.2s; }
+        button:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+        .leaderboard-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1 class="text-3xl font-bold mb-4 text-white">經典俄羅斯方塊</h1>
+        
+        <div class="game-area">
+            <canvas id="tetris-canvas" width="200" height="400"></canvas>
+            
+            <div class="info-panel">
+                <div class="score-card">
+                    分數: <span id="score">0</span>
+                </div>
+                <div class="status-card">
+                    等級 (每分鐘加速): <span id="level">1</span>
+                </div>
+                
+                <button id="start-button" onclick="startGame()" class="bg-green-500 hover:bg-green-600 text-white p-3 rounded-lg font-bold">開始遊戲</button>
+                <button id="submit-button" onclick="showScoreModal()" class="bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-lg font-bold hidden">上傳分數</button>
+
+                <a href="#" class="leaderboard-link text-sm text-center text-gray-400 mt-4">查看排行榜 (未實作)</a>
+            </div>
+        </div>
+        <p id="game-status" class="text-xl mt-4 text-yellow-400">點擊「開始遊戲」</p>
+    </div>
+
+    <!-- 分數上傳模態框 -->
+    <div id="score-modal" class="fixed inset-0 bg-black bg-opacity-70 hidden justify-center items-center">
+        <div class="bg-white p-6 rounded-xl shadow-2xl text-gray-800 w-80">
+            <h3 class="text-xl font-bold mb-4">恭喜！您得到了 <span id="final-score" class="text-red-600">0</span> 分</h3>
+            <label for="username" class="block mb-2 font-medium">輸入您的名字：</label>
+            <input type="text" id="username" class="w-full p-2 border border-gray-300 rounded-lg mb-4 focus:ring-blue-500 focus:border-blue-500" maxlength="20" placeholder="玩家名稱">
+            <button onclick="submitScore()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-lg font-bold">確認並上傳</button>
+            <p id="upload-message" class="mt-3 text-sm text-center"></p>
+        </div>
+    </div>
+
+    <script>
+        // ================================================================
+        // <<<< GitHub Pages 部署設定：請務必在此處替換 Apps Script URL >>>>
+        // ----------------------------------------------------------------
+        // 1. 設定 Apps Script URL 
+        // ----------------------------------------------------------------
+        // **請將此處替換為您正確部署後的 Google Apps Script Web App URL**
+        // 格式應為: https://script.google.com/macros/s/AKfy.../exec
+        const APPS_SCRIPT_URL = 'YOUR_DEPLOYED_APPS_SCRIPT_URL_HERE'; 
+        // ================================================================
+
+        // ----------------------------------------------------------------
+        // 2. 遊戲狀態與變數
+        // ----------------------------------------------------------------
+        let currentScore = 0;
+        let gameLevel = 1;
+        let dropInterval = 1000; // 初始間隔 1000ms (1秒)
+        let gameStartTime = 0;
+        let gameTimer = null; // 控制方塊下降
+        let speedTimer = null; // 控制速度加速
+
+        const scoreElement = document.getElementById('score');
+        const levelElement = document.getElementById('level');
+        const statusElement = document.getElementById('game-status');
+        const submitButton = document.getElementById('submit-button');
+        const startButton = document.getElementById('start-button');
+        
+        // 假設的遊戲功能
+        function updateGame() {
+            // TODO: 此處應實作完整的俄羅斯方塊邏輯 (方塊移動、碰撞、消除行)
+            
+            // 模擬分數增加
+            currentScore += 10;
+            scoreElement.textContent = currentScore;
+
+            if (Math.random() < 0.05) { // 模擬遊戲結束
+                endGame();
+            }
+        }
+        
+        // ----------------------------------------------------------------
+        // 3. 速度加速邏輯 (每分鐘加倍)
+        // ----------------------------------------------------------------
+        function startSpeedAcceleration() {
+            // 每 5 秒檢查一次是否已經過了一分鐘 (60秒)
+            speedTimer = setInterval(() => {
+                const elapsedSeconds = Math.floor((Date.now() - gameStartTime) / 1000);
+                const minutesElapsed = Math.floor(elapsedSeconds / 60);
+
+                // 檢查是否達到新的等級 (每過一分鐘，等級+1)
+                if (minutesElapsed >= gameLevel) {
+                    gameLevel++;
+                    levelElement.textContent = gameLevel;
+
+                    // 速度加倍：將間隔時間減半
+                    dropInterval /= 2;
+                    
+                    // 重新設定方塊下降的計時器，使用新的更短間隔
+                    clearInterval(gameTimer);
+                    gameTimer = setInterval(updateGame, dropInterval);
+                    
+                    statusElement.textContent = `LEVEL UP! 速度加倍至 ${dropInterval.toFixed(0)}ms！`;
+                    console.log(`Level ${gameLevel}: Drop Interval reduced to ${dropInterval}ms`);
+                }
+            }, 5000); 
+        }
+
+        // ----------------------------------------------------------------
+        // 4. 遊戲控制
+        // ----------------------------------------------------------------
+        function startGame() {
+            currentScore = 0;
+            gameLevel = 1;
+            dropInterval = 1000;
+            gameStartTime = Date.now();
+            scoreElement.textContent = currentScore;
+            levelElement.textContent = gameLevel;
+            statusElement.textContent = '遊戲進行中...';
+            submitButton.classList.add('hidden');
+            startButton.disabled = true;
+
+            // 啟動方塊下降計時器
+            gameTimer = setInterval(updateGame, dropInterval);
+            
+            // 啟動加速計時器
+            startSpeedAcceleration();
+        }
+
+        function endGame() {
+            clearInterval(gameTimer);
+            clearInterval(speedTimer);
+            statusElement.textContent = '遊戲結束！請上傳分數。';
+            submitButton.classList.remove('hidden');
+            startButton.disabled = false;
+            document.getElementById('final-score').textContent = currentScore;
+            
+            // 遊戲結束時自動彈出上傳分數模態框
+            showScoreModal();
+        }
+        
+        // ----------------------------------------------------------------
+        // 5. 分數上傳模態框邏輯與 API 呼叫
+        // ----------------------------------------------------------------
+        function showScoreModal() {
+            document.getElementById('score-modal').classList.remove('hidden');
+            document.getElementById('score-modal').classList.add('flex');
+            document.getElementById('final-score').textContent = currentScore;
+            document.getElementById('username').value = ''; // 清空使用者名稱
+            document.getElementById('upload-message').textContent = '';
+        }
+
+        function hideScoreModal() {
+            document.getElementById('score-modal').classList.add('hidden');
+            document.getElementById('score-modal').classList.remove('flex');
+        }
+
+        /**
+         * 透過 POST 請求將分數上傳到 Google Sheet (Apps Script API)
+         */
+        async function submitScore() {
+            const username = document.getElementById('username').value.trim();
+            const messageElement = document.getElementById('upload-message');
+
+            if (!username) {
+                messageElement.textContent = '請輸入玩家名稱！';
+                messageElement.className = 'mt-3 text-sm text-center text-red-500';
+                return;
+            }
+
+            // 檢查 URL 是否已被替換
+            if (APPS_SCRIPT_URL === 'YOUR_DEPLOYED_APPS_SCRIPT_URL_HERE') {
+                messageElement.textContent = '錯誤：請先在程式碼中設定 APPS_SCRIPT_URL！';
+                messageElement.className = 'mt-3 text-sm text-center text-red-500';
+                return;
+            }
+
+            messageElement.textContent = '上傳中...';
+            messageElement.className = 'mt-3 text-sm text-center text-yellow-500';
+
+            const formData = new URLSearchParams();
+            formData.append('action', 'saveScore');
+            formData.append('username', username);
+            formData.append('score', currentScore);
+
+            try {
+                const response = await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'cors', // 必須啟用 CORS
+                    cache: 'no-cache',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData.toString()
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    messageElement.textContent = '分數上傳成功！感謝您的參與！';
+                    messageElement.className = 'mt-3 text-sm text-center text-green-600';
+                    setTimeout(hideScoreModal, 1500); 
+                } else {
+                    messageElement.textContent = `上傳失敗: ${result.message}`;
+                    messageElement.className = 'mt-3 text-sm text-center text-red-500';
+                }
+
+            } catch (error) {
+                console.error('API 呼叫錯誤:', error);
+                messageElement.textContent = '網路連線錯誤或 API 故障。';
+                messageElement.className = 'mt-3 text-sm text-center text-red-500';
+            }
+        }
+
+        // 模擬基本的 Canvas 繪製 (非完整遊戲)
+        const canvas = document.getElementById('tetris-canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#f9fafb';
+        ctx.font = '16px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText('俄羅斯方塊區域', canvas.width / 2, canvas.height / 2);
+
+    </script>
+</body>
+</html>

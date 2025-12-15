@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>俄羅斯方塊專題：遊戲</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #1a202c; /* Dark background for game feel */
+      color: #edf2f7;
+    }
+    #gameCanvas {
+      background-color: #0d121c;
+      border: 4px solid #4a5568;
+      box-shadow: 0 0 20px rgba(74, 85, 104, 0.5);
+      touch-action: none; /* 禁用觸摸瀏覽器預設行為 */
+    }
+    .game-button {
+        transition: all 0.1s ease;
+    }
+    .game-button:active {
+        transform: scale(0.95);
+        box-shadow: none;
+    }
+  </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen flex flex-col items-center justify-center">
+
+  <div class="w-full max-w-lg">
+    <header class="text-center mb-6">
+      <h1 class="text-4xl font-extrabold text-indigo-400">
+        俄羅斯方塊 - 專題遊戲
+      </h1>
+      <p class="text-gray-400">
+        挑戰您的最高分並登上 Google Sheets 排行榜！
+      </p>
+    </header>
+
+    <div class="flex flex-col items-center gap-4">
+      
+      <!-- 遊戲畫布/區域 -->
+      <canvas id="gameCanvas" width="300" height="600" class="rounded-lg"></canvas>
+
+      <!-- 遊戲資訊與控制 -->
+      <div class="w-full flex justify-between p-3 bg-gray-700 rounded-lg shadow-inner">
+        <div class="text-center">
+          <p class="text-sm text-gray-400">分數</p>
+          <p id="scoreDisplay" class="text-2xl font-bold text-green-400">0</p>
+        </div>
+        <div class="text-center">
+          <p class="text-sm text-gray-400">行數</p>
+          <p id="linesDisplay" class="text-2xl font-bold text-yellow-400">0</p>
+        </div>
+        <div class="text-center">
+          <p class="text-sm text-gray-400">下一個</p>
+          <canvas id="nextPieceCanvas" width="90" height="60" class="bg-gray-800 rounded-md mt-1"></canvas>
+        </div>
+      </div>
+      
+      <!-- 遊戲控制按鈕 (適用於觸控螢幕和滑鼠) -->
+      <div class="w-full p-4 bg-gray-800 rounded-lg">
+        <p class="font-bold mb-3 text-center text-lg text-indigo-300">控制面板</p>
+        <div class="grid grid-cols-3 gap-3">
+          <!-- 左移 -->
+          <button id="btnLeft" class="game-button col-span-1 py-3 bg-gray-600 hover:bg-gray-500 rounded-xl text-white font-bold text-2xl shadow-lg">
+            &larr;
+          </button>
+          <!-- 旋轉 -->
+          <button id="btnRotate" class="game-button col-span-1 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl text-white font-bold text-2xl shadow-lg">
+            ↻
+          </button>
+          <!-- 右移 -->
+          <button id="btnRight" class="game-button col-span-1 py-3 bg-gray-600 hover:bg-gray-500 rounded-xl text-white font-bold text-2xl shadow-lg">
+            &rarr;
+          </button>
+          <!-- 快速下降 -->
+          <button id="btnDown" class="game-button col-span-2 py-3 bg-yellow-600 hover:bg-yellow-500 rounded-xl text-white font-bold text-2xl shadow-lg">
+            ⬇️ (下降)
+          </button>
+          <!-- Hard Drop (強制落下) -->
+          <button id="btnHardDrop" class="game-button col-span-1 py-3 bg-red-600 hover:bg-red-500 rounded-xl text-white font-bold text-xl shadow-lg">
+            💥
+          </button>
+        </div>
+      </div>
+
+      <!-- 遊戲狀態按鈕 -->
+      <div class="w-full flex justify-between gap-4 mt-4">
+        <button id="btnStartPause" class="w-1/2 py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition duration-200">
+          開始 / 暫停
+        </button>
+        <a href="<?= ScriptApp.getService().getUrl() ?>" 
+           class="w-1/2 inline-block text-center py-3 px-6 text-md font-semibold text-white bg-red-600 rounded-lg shadow-lg hover:bg-red-700 transition duration-300 transform hover:scale-105">
+          &larr; 回到主頁
+        </a>
+      </div>
+
+      <div id="message" class="mt-4 text-center text-sm text-yellow-300 font-bold">
+        點擊「開始」或按任意鍵開始遊戲！
+      </div>
+
+    </div>
+  </div>
+  
+  <!-- Custom Modal for Username Input (Replaces prompt()) -->
+  <div id="usernameModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+    <div class="bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-sm">
+      <h3 class="text-xl font-bold text-indigo-300 mb-4">輸入您的名字</h3>
+      <p class="text-gray-300 mb-4">遊戲結束！請輸入您的名字以儲存分數到排行榜。</p>
+      <input type="text" id="usernameInput" placeholder="例如: 冠軍王" value="Tetris Player" maxlength="20" class="w-full p-3 mb-4 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <div class="flex justify-end gap-3">
+        <button id="modalCancel" class="py-2 px-4 bg-gray-600 hover:bg-gray-500 rounded-lg text-white font-semibold transition">
+          取消
+        </button>
+        <button id="modalSave" class="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-semibold transition">
+          儲存分數
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================
+    // 完整的俄羅斯方塊遊戲邏輯 (JavaScript)
+    // =========================================================
+
+    // --- 遊戲設定 ---
+    const COLS = 10;
+    const ROWS = 20;
+    const BLOCK_SIZE = 30; // 每個方塊 30px x 30px
+    const SCORE_PER_LINE = [0, 40, 100, 300, 1200]; // 消除 0, 1, 2, 3, 4 行的分數
+
+    // --- 畫布初始化 ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = COLS * BLOCK_SIZE;
+    canvas.height = ROWS * BLOCK_SIZE;
+
+    const nextCanvas = document.getElementById('nextPieceCanvas');
+    const nextCtx = nextCanvas.getContext('2d');
+
+    // --- 遊戲狀態 ---
+    let board;
+    let currentPiece;
+    let nextPiece;
+    let score = 0;
+    let lines = 0;
+    let isGameOver = false;
+    let isPaused = false;
+
+    // --- 時間控制 ---
+    let dropCounter = 0;
+    let dropInterval = 1000; // 初始下降速度 (毫秒)
+    let lastTime = 0;
+    let animationId = null;
+
+    // --- HTML 元素 ---
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const linesDisplay = document.getElementById('linesDisplay');
+    const messageElement = document.getElementById('message');
+    const startPauseButton = document.getElementById('btnStartPause');
+    const usernameModal = document.getElementById('usernameModal');
+    const usernameInput = document.getElementById('usernameInput');
+    const modalSaveButton = document.getElementById('modalSave');
+    const modalCancelButton = document.getElementById('modalCancel');
+
+
+    // --- 方塊形狀和顏色 (Tetrominoes) ---
+    const SHAPES = [
+      // I: 青色
+      { matrix: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], color: '#00FFFF' }, 
+      // J: 藍色
+      { matrix: [[1, 0, 0], [1, 1, 1], [0, 0, 0]], color: '#0000FF' }, 
+      // L: 橘色
+      { matrix: [[0, 0, 1], [1, 1, 1], [0, 0, 0]], color: '#FFA500' }, 
+      // O: 黃色
+      { matrix: [[1, 1], [1, 1]], color: '#FFFF00' }, 
+      // S: 綠色
+      { matrix: [[0, 1, 1], [1, 1, 0], [0, 0, 0]], color: '#00FF00' }, 
+      // T: 紫色
+      { matrix: [[0, 1, 0], [1, 1, 1], [0, 0, 0]], color: '#800080' }, 
+      // Z: 紅色
+      { matrix: [[1, 1, 0], [0, 1, 1], [0, 0, 0]], color: '#FF0000' }
+    ];
+
+    /**
+     * 產生隨機方塊
+     * @returns {Object} 包含形狀和位置的方塊物件
+     */
+    function createPiece() {
+      const index = Math.floor(Math.random() * SHAPES.length);
+      const shape = SHAPES[index];
+      return {
+        matrix: shape.matrix,
+        color: shape.color,
+        x: Math.floor(COLS / 2) - Math.floor(shape.matrix[0].length / 2),
+        y: 0
+      };
+    }
+
+    /**
+     * 繪製一個方塊格
+     * @param {number} x X 座標 (grid)
+     * @param {number} y Y 座標 (grid)
+     * @param {string} color 顏色
+     */
+    function drawBlock(ctx, x, y, color) {
+      if (y < 0) return; // 不繪製邊界外的方塊
+      
+      ctx.fillStyle = color;
+      ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+      
+      // 增加邊框增加立體感
+      ctx.strokeStyle = '#2d3748'; // 深灰邊框
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+    }
+
+    /**
+     * 繪製整個遊戲面板和已鎖定方塊
+     */
+    function drawBoard() {
+      // 繪製背景
+      ctx.fillStyle = '#0d121c';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 繪製已鎖定方塊
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+          if (board[y][x]) {
+            drawBlock(ctx, x, y, board[y][x]);
+          }
+        }
+      }
+
+      // 繪製當前活動方塊
+      if (currentPiece) {
+        currentPiece.matrix.forEach((row, y) => {
+          row.forEach((value, x) => {
+            if (value) {
+              drawBlock(ctx, currentPiece.x + x, currentPiece.y + y, currentPiece.color);
+            }
+          });
+        });
+      }
+    }
+
+    /**
+     * 繪製下一個方塊
+     */
+    function drawNextPiece() {
+      nextCtx.fillStyle = '#1a202c'; // 清空背景
+      nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+
+      if (nextPiece) {
+        const matrix = nextPiece.matrix;
+        const size = matrix.length;
+        // 為了簡單起見，直接使用絕對偏移來置中
+        const xOffset = (nextCanvas.width - size * BLOCK_SIZE * 0.5) / 2;
+        const yOffset = (nextCanvas.height - size * BLOCK_SIZE * 0.5) / 2;
+        const smallBlockSize = BLOCK_SIZE * 0.5; // 縮小繪製
+        
+        matrix.forEach((row, y) => {
+          row.forEach((value, x) => {
+            if (value) {
+              nextCtx.fillStyle = nextPiece.color;
+              nextCtx.fillRect(x * smallBlockSize + xOffset, y * smallBlockSize + yOffset, smallBlockSize, smallBlockSize);
+              nextCtx.strokeStyle = '#2d3748';
+              nextCtx.lineWidth = 1;
+              nextCtx.strokeRect(x * smallBlockSize + xOffset, y * smallBlockSize + yOffset, smallBlockSize, smallBlockSize);
+            }
+          });
+        });
+      }
+    }
+
+    /**
+     * 檢查移動是否合法 (碰撞偵測)
+     * @param {Object} piece 方塊物件
+     * @param {number} x 位移
+     * @param {number} y 位移
+     * @returns {boolean} 是否合法
+     */
+    function isValidMove(piece, dx, dy) {
+      const newX = piece.x + dx;
+      const newY = piece.y + dy;
+      const matrix = piece.matrix;
+
+      for (let y = 0; y < matrix.length; y++) {
+        for (let x = 0; x < matrix[y].length; x++) {
+          if (matrix[y][x]) {
+            const boardX = newX + x;
+            const boardY = newY + y;
+
+            // 1. 檢查水平邊界
+            if (boardX < 0 || boardX >= COLS) {
+              return false;
+            }
+            // 2. 檢查垂直邊界 (底部)
+            if (boardY >= ROWS) {
+              return false;
+            }
+            // 3. 檢查與已鎖定方塊的碰撞
+            // 注意：boardY >= 0 必須在存取 board[boardY] 之前檢查
+            if (boardY >= 0 && board[boardY] && board[boardY][boardX]) {
+              return false;
+            }
+          }
+        }
+      }
+      return true;
+    }
+
+    /**
+     * 旋轉方塊的矩陣
+     * @param {Array<Array<number>>} matrix 原始矩陣
+     * @returns {Array<Array<number>>} 旋轉後的矩陣
+     */
+    function rotateMatrix(matrix) {
+      const N = matrix.length;
+      const newMatrix = Array.from({ length: N }, () => Array(N).fill(0));
+      for (let y = 0; y < N; y++) {
+        for (let x = 0; x < N; x++) {
+          newMatrix[x][N - 1 - y] = matrix[y][x];
+        }
+      }
+      return newMatrix;
+    }
+
+    /**
+     * 處理方塊旋轉
+     */
+    function rotatePiece() {
+      const originalMatrix = currentPiece.matrix;
+      currentPiece.matrix = rotateMatrix(originalMatrix);
+
+      // 檢查旋轉後是否合法，如果不合法則嘗試 "踢牆" (Wall Kick)
+      // 簡易踢牆邏輯：嘗試左右移動一格
+      if (!isValidMove(currentPiece, 0, 0)) {
+        if (isValidMove(currentPiece, 1, 0)) { // 嘗試右踢
+          currentPiece.x++;
+        } else if (isValidMove(currentPiece, -1, 0)) { // 嘗試左踢
+          currentPiece.x--;
+        } else {
+          // 旋轉失敗，恢復原狀
+          currentPiece.matrix = originalMatrix; 
+        }
+      }
+    }
+
+    /**
+     * 鎖定方塊到面板上，並檢查清行
+     */
+    function lockPiece() {
+      currentPiece.matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+          if (value) {
+            const boardX = currentPiece.x + x;
+            const boardY = currentPiece.y + y;
+            // 遊戲結束檢查：如果方塊鎖定在最頂部 (y=0)，則遊戲結束
+            if (boardY < 0) {
+              gameOver();
+              return;
+            }
+            board[boardY][boardX] = currentPiece.color;
+          }
+        });
+      });
+
+      if (isGameOver) return;
+      
+      clearLines();
+      
+      // 產生下一個方塊
+      currentPiece = nextPiece;
+      nextPiece = createPiece();
+      drawNextPiece();
+      
+      // 檢查新方塊是否一開始就碰撞 (遊戲結束條件)
+      if (!isValidMove(currentPiece, 0, 0)) {
+        gameOver();
+      }
+    }
+
+    /**
+     * 檢查並清除完整的行
+     */
+    function clearLines() {
+      let linesCleared = 0;
+      
+      outer: for (let y = ROWS - 1; y >= 0; y--) {
+        // 檢查該行是否完整
+        for (let x = 0; x < COLS; x++) {
+          if (!board[y][x]) {
+            continue outer; // 該行不完整，檢查下一行
+          }
+        }
+
+        // 行完整，開始清除和下移
+        linesCleared++;
+        for (let k = y; k > 0; k--) {
+          board[k] = board[k - 1]; // 將上一行的內容複製到當前行
+        }
+        board[0] = Array(COLS).fill(0); // 最頂端新增空行
+        y++; // 由於行下移了，需要重新檢查當前 y 座標
+      }
+      
+      if (linesCleared > 0) {
+        // 更新分數和行數
+        score += SCORE_PER_LINE[linesCleared];
+        lines += linesCleared;
+        scoreDisplay.textContent = score;
+        linesDisplay.textContent = lines;
+        
+        // 根據行數增加遊戲難度 (加快下降速度)
+        dropInterval = Math.max(100, 1000 - Math.floor(lines / 10) * 100);
+      }
+    }
+
+    /**
+     * 遊戲主要循環 (Game Loop)
+     * @param {number} time 瀏覽器提供的高解析度時間戳
+     */
+    function gameLoop(time = 0) {
+      if (isGameOver || isPaused) {
+        animationId = null;
+        return;
+      }
+
+      const deltaTime = time - lastTime;
+      lastTime = time;
+
+      dropCounter += deltaTime;
+      if (dropCounter > dropInterval) {
+        dropPiece(1); // 自動向下移動
+        dropCounter = 0;
+      }
+
+      drawBoard();
+      animationId = requestAnimationFrame(gameLoop);
+    }
+
+    /**
+     * 向下移動方塊 (或鎖定)
+     * @param {number} dy 垂直位移 (通常為 1)
+     */
+    function dropPiece(dy) {
+      if (isValidMove(currentPiece, 0, dy)) {
+        currentPiece.y += dy;
+        dropCounter = 0; // 重置計時器，避免立即再次下降
+      } else {
+        // 碰撞發生，鎖定方塊
+        lockPiece();
+      }
+    }
+
+    /**
+     * 快速落下 (Hard Drop)
+     */
+    function hardDrop() {
+        let distance = 0;
+        while(isValidMove(currentPiece, 0, distance + 1)) {
+            distance++;
+        }
+        if (distance > 0) {
+            currentPiece.y += distance;
+            lockPiece();
+            // 在 Hard Drop 後立即開始新的下降間隔
+            dropCounter = 0; 
+        }
+    }
+
+    /**
+     * 處理遊戲結束
+     */
+    function gameOver() {
+      isGameOver = true;
+      cancelAnimationFrame(animationId);
+      animationId = null;
+      messageElement.textContent = `遊戲結束！您的分數是 ${score}。`;
+      messageElement.className = 'mt-4 text-center text-xl text-red-500 font-extrabold animate-pulse';
+      startPauseButton.textContent = '重新開始';
+      
+      // 提示使用者儲存分數 (使用自定義 Modal)
+      const saveBtn = document.createElement('button');
+      saveBtn.id = 'saveScoreButton';
+      saveBtn.className = 'mt-4 w-full py-2 px-4 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 transition duration-200';
+      saveBtn.textContent = '點擊儲存您的分數到排行榜';
+      saveBtn.onclick = openUsernameModal; // 點擊開啟 Modal
+
+      document.querySelector('.flex-col.items-center.gap-4').appendChild(saveBtn);
+      
+      // 鎖定所有控制
+      toggleControls(false);
+    }
+    
+    /**
+     * 初始化/重置遊戲狀態
+     */
+    function initGame() {
+      // 建立空的遊戲面板
+      board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+      
+      // 重設分數和狀態
+      score = 0;
+      lines = 0;
+      isGameOver = false;
+      isPaused = false;
+      dropInterval = 1000;
+      dropCounter = 0;
+      lastTime = 0;
+      scoreDisplay.textContent = score;
+      linesDisplay.textContent = lines;
+      messageElement.textContent = '鍵盤控制: ← → 移動, ↑ 旋轉, ↓ 軟降, Space 強降';
+      messageElement.className = 'mt-4 text-center text-sm text-yellow-300 font-bold';
+      startPauseButton.textContent = '暫停';
+
+      // 產生初始方塊
+      currentPiece = createPiece();
+      nextPiece = createPiece();
+      drawNextPiece();
+      
+      // 確保控制鈕可用
+      toggleControls(true);
+      
+      // 清除可能存在的儲存按鈕
+      const saveBtn = document.getElementById('saveScoreButton');
+      if (saveBtn) saveBtn.parentNode.removeChild(saveBtn);
+
+      // 啟動遊戲迴圈
+      if (animationId) cancelAnimationFrame(animationId);
+      gameLoop();
+    }
+    
+    /**
+     * 處理開始/暫停按鈕
+     */
+    function handleStartPause() {
+        if (isGameOver) {
+            // 重新開始遊戲
+            initGame();
+        } else {
+            // 暫停/恢復遊戲
+            isPaused = !isPaused;
+            if (isPaused) {
+                startPauseButton.textContent = '繼續';
+                messageElement.textContent = '遊戲已暫停';
+                if (animationId) cancelAnimationFrame(animationId);
+            } else {
+                startPauseButton.textContent = '暫停';
+                messageElement.textContent = '遊戲進行中...';
+                lastTime = performance.now(); // 重新校正時間
+                gameLoop();
+            }
+        }
+    }
+
+    /**
+     * 處理鍵盤事件
+     * @param {KeyboardEvent} e 鍵盤事件物件
+     */
+    document.addEventListener('keydown', (e) => {
+      // 檢查是否是需要阻止預設行為的鍵 (方向鍵和空白鍵)
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+          e.preventDefault(); // 阻止網頁捲動等預設行為
+      }
+      
+      // 處理開始/暫停 (不論遊戲狀態)
+      if (e.key === 'P' || e.key === 'p') {
+          handleStartPause();
+          return;
+      }
+      
+      if (isGameOver || isPaused || !currentPiece) return;
+
+      // 鍵盤控制邏輯
+      if (e.key === 'ArrowLeft' || e.key === 'A' || e.key === 'a') {
+        if (isValidMove(currentPiece, -1, 0)) currentPiece.x--;
+        drawBoard();
+      } else if (e.key === 'ArrowRight' || e.key === 'D' || e.key === 'd') {
+        if (isValidMove(currentPiece, 1, 0)) currentPiece.x++;
+        drawBoard();
+      } else if (e.key === 'ArrowDown' || e.key === 'S' || e.key === 's') {
+        // Soft Drop (向下移動一格)
+        dropPiece(1);
+        drawBoard();
+      } else if (e.key === 'ArrowUp' || e.key === 'W' || e.key === 'w' || e.key === 'Z' || e.key === 'z') {
+        // 旋轉
+        rotatePiece();
+        drawBoard();
+      } else if (e.key === ' ') { // Space
+        // Hard Drop (強制落下)
+        hardDrop();
+        drawBoard();
+      }
+    });
+    
+    /**
+     * 處理觸控按鈕事件
+     */
+    function setupTouchControls() {
+        document.getElementById('btnLeft').addEventListener('click', () => {
+            if (isGameOver || isPaused || !currentPiece) return;
+            if (isValidMove(currentPiece, -1, 0)) currentPiece.x--;
+            drawBoard();
+        });
+        document.getElementById('btnRight').addEventListener('click', () => {
+            if (isGameOver || isPaused || !currentPiece) return;
+            if (isValidMove(currentPiece, 1, 0)) currentPiece.x++;
+            drawBoard();
+        });
+        document.getElementById('btnRotate').addEventListener('click', () => {
+            if (isGameOver || isPaused || !currentPiece) return;
+            rotatePiece();
+            drawBoard();
+        });
+        document.getElementById('btnDown').addEventListener('click', () => {
+            if (isGameOver || isPaused || !currentPiece) return;
+            dropPiece(1);
+            drawBoard();
+        });
+        document.getElementById('btnHardDrop').addEventListener('click', () => {
+            if (isGameOver || isPaused || !currentPiece) return;
+            hardDrop();
+            drawBoard();
+        });
+        startPauseButton.addEventListener('click', handleStartPause);
+    }
+    
+    /**
+     * 啟用或禁用控制按鈕 (用於遊戲結束時)
+     */
+    function toggleControls(enable) {
+        const buttons = [
+            'btnLeft', 'btnRight', 'btnRotate', 'btnDown', 'btnHardDrop'
+        ];
+        buttons.forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.disabled = !enable;
+        });
+    }
+
+    // --- Apps Script 溝通函式 (使用自定義 Modal) ---
+
+    /**
+     * 開啟輸入名字的 Modal
+     */
+    function openUsernameModal() {
+        usernameModal.classList.remove('hidden');
+        usernameInput.focus();
+        // 禁用儲存按鈕
+        const saveBtn = document.getElementById('saveScoreButton');
+        if (saveBtn) saveBtn.disabled = true;
+    }
+
+    /**
+     * 儲存最終分數到 Google Sheets
+     */
+    function saveFinalScore(username) {
+        // 關閉 Modal
+        usernameModal.classList.add('hidden');
+        
+        let finalUsername = username.trim() || "匿名玩家";
+        finalUsername = finalUsername.substring(0, 20); // 限制長度
+
+        messageElement.textContent = `正在儲存 ${finalUsername} 的分數 ${score}...`;
+        messageElement.className = 'mt-4 text-center text-sm text-yellow-300 font-bold';
+
+        // 呼叫 Apps Script 的 saveScore 函式
+        google.script.run
+            .withSuccessHandler(showSaveSuccess)
+            .withFailureHandler(showSaveError)
+            .saveScore(finalUsername, score);
+    }
+    
+    // 設定 Modal 的事件監聽器
+    modalSaveButton.addEventListener('click', () => {
+        saveFinalScore(usernameInput.value);
+    });
+    
+    modalCancelButton.addEventListener('click', () => {
+        usernameModal.classList.add('hidden');
+        // 重新啟用儲存按鈕
+        const saveBtn = document.getElementById('saveScoreButton');
+        if (saveBtn) saveBtn.disabled = false;
+    });
+
+    /**
+     * 處理分數儲存成功的訊息。
+     */
+    function showSaveSuccess(response) {
+      messageElement.className = 'mt-4 text-center text-sm text-green-400 font-bold';
+      messageElement.textContent = response.message + ' (請返回主頁查看排行榜)';
+    }
+
+    /**
+     * 處理分數儲存失敗的訊息。
+     */
+    function showSaveError(error) {
+      console.error("分數儲存失敗:", error);
+      messageElement.className = 'mt-4 text-center text-sm text-red-500 font-bold';
+      messageElement.textContent = '儲存失敗：' + error.message;
+      // 重新啟用按鈕 (如果 Modal 已經關閉)
+      const saveBtn = document.getElementById('saveScoreButton');
+      if (saveBtn) saveBtn.disabled = false;
+    }
+
+    // --- 程式入口點 ---
+    document.addEventListener('DOMContentLoaded', () => {
+      setupTouchControls();
+      
+      // 延遲初始化，等待第一次點擊或按鍵
+      initGame();
+    });
+
+  </script>
+</body>
+</html>
